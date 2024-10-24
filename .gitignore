@@ -6,3 +6,4 @@ mini-kv/dbs
 **/notes
 **/test.py
 **/**.json
+**/__pycache__
