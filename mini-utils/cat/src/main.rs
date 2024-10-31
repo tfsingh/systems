@@ -1,4 +1,7 @@
-use std::{env, fs, io::{self, Write}};
+use std::{
+    env, fs,
+    io::{self, Write},
+};
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();

@@ -1,13 +1,14 @@
-use std::{env, io::{self, Write}, fs};
+use std::{
+    env, fs,
+    io::{self, Write},
+};
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
-
     let pattern = args.get(0).expect("Pattern not supplied");
 
     for file in &args[1..] {
         let data: String = fs::read_to_string(file).unwrap();
-
         let occurences = find_occurences_of_pattern(&pattern, &data);
 
         for occurence in occurences {
