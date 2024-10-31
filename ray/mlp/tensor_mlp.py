@@ -4,25 +4,28 @@ import ray
 
 @ray.remote
 class TensorParallelLinear(nn.Module):
-    def __init__(self, in_features, out_features):
+    def __init__(self, in_features, out_features, dimension):
         super().__init__()
-        features = out_features // 2
-        self.weight = nn.Parameter(torch.randn(in_features, features))
-        self.bias = nn.Parameter(torch.randn(features))
+        if dimension == 0:
+            features = out_features // 2
+            self.weight = nn.Parameter(torch.randn(in_features, features))
+        else:
+            features = in_features // 2
+            self.weight = nn.Parameter(torch.randn(features, out_features))
 
     def forward(self, x):
-        return torch.matmul(x, self.weight) + self.bias
+        return torch.matmul(x, self.weight)
 
 @ray.remote
 class TensorParallelMLP(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super().__init__()
 
-        self.fc1_part1 = TensorParallelLinear.remote(input_size, hidden_size)
-        self.fc1_part2 = TensorParallelLinear.remote(input_size, hidden_size)
+        self.fc1_part1 = TensorParallelLinear.remote(input_size, hidden_size, 0)
+        self.fc1_part2 = TensorParallelLinear.remote(input_size, hidden_size, 0)
 
-        self.fc2_part1 = TensorParallelLinear.remote(hidden_size, output_size)
-        self.fc2_part2 = TensorParallelLinear.remote(hidden_size, output_size)
+        self.fc2_part1 = TensorParallelLinear.remote(hidden_size, output_size, 1)
+        self.fc2_part2 = TensorParallelLinear.remote(hidden_size, output_size, 1)
 
         self.relu = nn.ReLU()
 
@@ -30,13 +33,14 @@ class TensorParallelMLP(nn.Module):
         fc1_out_part1 = self.fc1_part1.forward.remote(x)
         fc1_out_part2 = self.fc1_part2.forward.remote(x)
 
-        fc1_out = torch.cat(ray.get([fc1_out_part1, fc1_out_part2]), dim=1)
-        x = self.relu(fc1_out)
+        x = self.relu(ray.get(fc1_out_part1))
+        y = self.relu(ray.get(fc1_out_part2))
 
         fc2_out_part1 = self.fc2_part1.forward.remote(x)
-        fc2_out_part2 = self.fc2_part2.forward.remote(x)
+        fc2_out_part2 = self.fc2_part2.forward.remote(y)
 
-        output = torch.cat(ray.get([fc2_out_part1, fc2_out_part2]), dim=1)
+        fc2_out_part1, fc2_out_part2 = ray.get([fc2_out_part1, fc2_out_part2])
+        output = fc2_out_part1 + fc2_out_part2
         return output
 
 def run_tensor_parallel_mlp():
